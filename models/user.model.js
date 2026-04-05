@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 import validator from "validator";
+import bcrypt from "bcryptjs";
+
 const userSchema = new mongoose.Schema({
     studioName: {
         type: String,
@@ -56,6 +58,10 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ["user", "admin"],
         default: "user"
+    },
+    passwordChangedAt: {
+        type: Date,
+        default: null
     }
 }, {timestamps: true , toJSON: { virtuals: true } , toObject: { virtuals: true }});
 
@@ -67,6 +73,26 @@ userSchema.virtual("cashBalanceInDollars").get(function() {
 userSchema.virtual("netWorthInDollars").get(function() {
     return this.netWorth / 100;
 })
+
+// قبل مانحفظ اليوزر نشفر الباسورد بتاعه
+userSchema.pre("save" , async function() {
+    if(!this.isModified("password") || !this.password) return;
+
+    this.password = await bcrypt.hash(this.password , 12);
+})
+
+userSchema.methods.correctPassword = async function(candidatePassword , userPassword){
+    return await bcrypt.compare(candidatePassword , userPassword);
+}
+
+userSchema.methods.changedPasswordAfter = function(JWTTimestamp) {
+    if(this.passwordChangedAt){
+        const changedTimestamp = parseInt(this.passwordChangedAt.getTime() / 1000 , 10);
+
+        return JWTTimestamp < changedTimestamp;
+    }
+    return false;
+}
 
 const User = mongoose.model("User" , userSchema);
 

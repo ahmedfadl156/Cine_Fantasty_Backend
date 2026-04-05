@@ -6,6 +6,7 @@ import cors from "cors";
 import dotenv from "dotenv"
 import errorMiddleware from "./middlewares/errorMiddleware.js";
 import AppError from "./utils/appError.js";
+import authRouter from "./routes/auth.routes.js"
 dotenv.config({path: "config/.env"})
 const app = express();
 
@@ -23,6 +24,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 //ROUTES
+app.use("/api/v1/auth" , authRouter)
 
 app.all("/{*path}" , (req , res , next) => {
     next(new AppError(`Can't Find ${req.originalUrl} on this server!` , 404))
