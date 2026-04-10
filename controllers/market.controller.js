@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
-import catchAsync from "../utils/catchAsync";
-import AppError from "../utils/appError";
-import Movie from "../models/movie.model";
-import StudioAsset from "../models/studioAsset.model";
-import User from "../models/user.model";
+import catchAsync from "../utils/catchAsync.js";
+import AppError from "../utils/appError.js";
+import Movie from "../models/movie.model.js";
+import StudioAsset from "../models/studioAsset.model.js";
+import User from "../models/user.model.js";
 
 // الفانكشن المسئولة عن شراء فيلم
 export const buyMovie = catchAsync(async(req , res , next) => {
@@ -41,7 +41,7 @@ export const buyMovie = catchAsync(async(req , res , next) => {
         user.cashBalance -= movie.basePrice;
         await user.save({session});
 
-        const newAsset = await StudioAsset.create([{
+        const newAsset = await StudioAsset.create([{ 
             userId: user._id,
             movieId: movie._id,
             purchasePrice: movie.basePrice
@@ -63,4 +63,106 @@ export const buyMovie = catchAsync(async(req , res , next) => {
         session.endSession();
         return next(error)
     }
+})
+
+
+// الفانكشن اللى هتجيب الافلام اللى لسه هتتعرض عشان نبعتها للفرونت يعرضها
+export const getUpcomingMovies = catchAsync(async (req , res , next) => {
+    // هنظبط ال pagination علشان الافلام لو كتير نقسمها
+    const page = parseInt(req.query.page , 10) || 1;
+    const limit = parseInt(req.query.limit , 10) || 20;
+    const skip = (page - 1) * limit;
+
+    const query = {status: "UPCOMING"};
+    // هنجيب الافلام اللى لسه هتتعرض بس
+    const movies = await Movie.find(query)
+    .select("title posterPath backdropPath releaseDate basePrice")
+    .sort({releaseDate: 1}).skip(skip).limit(limit);
+
+    // هنحسب عدد الصفحات كلها
+    const totalMovies = await Movie.countDocuments(query);
+    const totalPages = Math.ceil(totalMovies / limit);
+
+    res.status(200).json({
+        status: "success",
+        results: movies.length,
+        pagination: {
+            currentPage: page,
+            totalPages,
+            totalMovies,
+            hasNextPage: page < totalPages,
+            hasPreviousPage: page > 1
+        },
+        data: {movies}
+    })
+})
+
+// هنجيب اعلى 8 افلام هنا ال top علشان نعرضهم فى الصفحة الرئيسية
+export const getTopMovies = catchAsync(async (req , res , next) => {
+    const movies = await Movie.find().sort({popularity: -1}).limit(8).select("title posterPath backdropPath releaseDate basePrice basePriceInDollars");
+
+    if(!movies){
+        return next(new AppError("No movies found" , 404))
+    };
+
+    res.status(200).json({
+        status: "success",
+        results: movies.length,
+        data: {
+            movies
+        }
+    })
+})
+
+
+// دى شوية فانكشنز خاصة بالادمن علشان يقدر نستعملها فى الداشبورد
+export const updateMovie = catchAsync(async (req , res , next) => {
+    const {status} = req.body;
+    const movieId = req.params.movieId;
+    // نحدث الفيلم هنا
+    const updatedMovie = await Movie.findByIdAndUpdate(
+        movieId,
+        {
+            $set: {
+                ...(status && {status})
+            }
+        },
+        {returnDocument: "after" , runValidators: true}
+    );
+
+    if(!updatedMovie){
+        return next(new AppError("No movie found with that ID" , 404))
+    }
+
+    res.status(200).json({
+        status: "success",
+        data: {
+            movie: updatedMovie
+        }
+    })
+})
+
+export const deleteMovie = catchAsync(async (req , res , next) => {
+    const movieId = req.params.id;
+
+    // هنشوف الفيلم دا حد شاريه ولا لا
+    const isPurchased = await StudioAsset.exists({movieId: movieId});
+
+    if(isPurchased){
+        return res.status(409).json({
+            status: "Fail",
+            message: "Can't delete movie because it's purchased by a studio."
+        })
+    };
+
+    const movie = await Movie.findByIdAndDelete(movieId);
+
+    if(!movie){
+        return next(new AppError('No movie found with that ID', 404));
+    }
+
+    res.status(204).json({
+        status: "Success",
+        data: null
+    })
 })

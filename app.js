@@ -7,24 +7,28 @@ import dotenv from "dotenv"
 import errorMiddleware from "./middlewares/errorMiddleware.js";
 import AppError from "./utils/appError.js";
 import authRouter from "./routes/auth.routes.js"
+import marketRouter from "./routes/market.routes.js";
+import movieRouter from "./routes/movie.routes.js";
 dotenv.config({path: "config/.env"})
 const app = express();
 
 // Middlewares
 app.use(logger("dev"));
+app.use(cookieParser());
 app.use(express.json());
 app.use(helmet());
 app.use(cors({
-    origin: process.env.CLIENT_URL || "http://127.0.0.1:3000", 
+    origin: process.env.CLIENT_URL || "http://localhost:3000",  
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
 
 //ROUTES
 app.use("/api/v1/auth" , authRouter)
+app.use("/api/v1/market" , marketRouter)
+app.use("/api/v1/movie" , movieRouter)
 
 app.all("/{*path}" , (req , res , next) => {
     next(new AppError(`Can't Find ${req.originalUrl} on this server!` , 404))

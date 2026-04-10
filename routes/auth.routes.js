@@ -1,7 +1,8 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { login, signup } from "../controllers/auth.controller.js";
+import { getMe, login, logout, protect, signup } from "../controllers/auth.controller.js";
 import { testSync } from "../controllers/movie.controller.js";
+import { signupValidator } from "../middlewares/validators/authValidator.js";
 
 const authRouter = Router();
 
@@ -14,6 +15,8 @@ const loginLimiter = rateLimit({
 })
 
 authRouter.post('/login' , loginLimiter , login);
-authRouter.post('/signup' , loginLimiter , signup);
+authRouter.post('/logout' , logout);
+authRouter.post('/signup' , loginLimiter , signupValidator , signup);
+authRouter.get('/getMe' , protect , getMe);
 authRouter.post('/test-sync' , testSync);
 export default authRouter;

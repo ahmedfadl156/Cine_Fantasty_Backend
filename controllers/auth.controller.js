@@ -16,10 +16,11 @@ const createSendToken = (user , statusCode , res) => {
     const cookieOptions = {
         expires: new Date(Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000),
         httpOnly: true,
-        sameSite: "lax",
+        sameSite: "lax" ,
     }
 
     if(process.env.NODE_ENV === "production") cookieOptions.secure = true;
+    console.log(token)
 
     res.cookie("cineFantasty_Jwt" , token , cookieOptions)
 
@@ -66,6 +67,37 @@ export const login = catchAsync(async (req , res , next) => {
     createSendToken(user , 200 , res);
 })
 
+// تسجيل خروج اليوزر 
+export const logout = (req , res , next) => {
+    res.clearCookie("cineFantasty_Jwt" , {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === 'production',
+    });
+
+    res.status(200).json({
+        status: "success"
+    })
+}
+
+// جلب معلومات اليوزر الحالى
+export const getMe = catchAsync(async (req , res , next) => {
+    const id = req.user._id;
+
+    const user = await User.findById(id);
+
+    if(!user){
+        return next(new AppError('User not found' , 404));
+    }
+
+    res.status(200).json({
+        status: "success",
+        data: {
+            user
+        }
+    })
+})
+
 // فانشكن الحماية اللى بنستخدمها قبل اى عملية عشان نتاكد من اليوزر
 export const protect = catchAsync(async (req , res , next) => {
     let token;
@@ -73,8 +105,8 @@ export const protect = catchAsync(async (req , res , next) => {
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
         token = req.headers.authorization.split(' ')[1];
     } 
-    else if (req.cookies.jwt) {
-        token = req.cookies.jwt;
+    else if (req.cookies.cineFantasty_Jwt) {
+        token = req.cookies.cineFantasty_Jwt;
     }
 
     if(!token) {
