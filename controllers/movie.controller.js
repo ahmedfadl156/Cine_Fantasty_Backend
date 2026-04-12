@@ -86,6 +86,7 @@ export const getMovieDetails = catchAsync(async (req , res , next) => {
             systemId: gameMovieData._id,
             title: gameMovieData.title,
             gameStatus: gameMovieData.status,
+            posterPath: gameMovieData.posterPath,
             purchasePriceInDollars: gameMovieData.basePriceInDollars,
             currentProfitOrLoss: gameMovieData.currentProfitOrLoss,
             },

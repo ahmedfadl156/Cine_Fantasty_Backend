@@ -60,7 +60,7 @@ export const syncUpcomingMovies = async () => {
             "primary_release_date.gte": formatDate(today),
             "primary_release_date.lte": formatDate(next60Days),
             page: currentPage.toString(),
-            with_release_type: "2|3"
+            with_release_type: "2|3",
         });
 
         const response = await fetch(`https://api.themoviedb.org/3/discover/movie?${params.toString()}`);
@@ -165,5 +165,29 @@ export const syncBoxOfficeRevenues = async () => {
         }
     } catch (error) {
         console.error('CRITICAL ERROR in Revenue Sync Job:', error.message);
+    }
+}
+
+// فانكشن هتشتغل كل يوم الساعة 12 فى بداية اليوم وتشوف الافلام اللى التاريخ انها هتتعرض انهاردة علشان تحدث حالتها
+export const activateTodaysMovies = async () => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const result = await Movie.updateMany(
+            {
+                status: "UPCOMING",
+                releaseDate: {$lte: today}
+            },
+            {
+                $set: {status: "IN_THEATERS"}
+            }
+        );
+
+        if(result.modifiedCount > 0){
+            console.log(`${result.modifiedCount} movies activated.`);
+        }
+    } catch (error) {
+        console.error("Activation Error: " , error)
     }
 }

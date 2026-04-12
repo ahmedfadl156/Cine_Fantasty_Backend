@@ -9,6 +9,8 @@ import AppError from "./utils/appError.js";
 import authRouter from "./routes/auth.routes.js"
 import marketRouter from "./routes/market.routes.js";
 import movieRouter from "./routes/movie.routes.js";
+import studioRouter from "./routes/studio.routes.js";
+import leaguesRouter from "./routes/leagues.routes.js";
 dotenv.config({path: "config/.env"})
 const app = express();
 
@@ -29,6 +31,8 @@ app.use(express.urlencoded({ extended: false }));
 app.use("/api/v1/auth" , authRouter)
 app.use("/api/v1/market" , marketRouter)
 app.use("/api/v1/movie" , movieRouter)
+app.use("/api/v1/studio" , studioRouter)
+app.use("/api/v1/leagues" , leaguesRouter)
 
 app.all("/{*path}" , (req , res , next) => {
     next(new AppError(`Can't Find ${req.originalUrl} on this server!` , 404))

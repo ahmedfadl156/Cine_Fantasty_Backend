@@ -61,7 +61,7 @@ leagueSchema.pre("save" , async function() {
     
     this.inviteCode = generatedCode;
     
-    if(!this.members.include(this.ownerId)){
+    if(!this.members.includes(this.ownerId)){
         this.members.push(this.ownerId);
     }
 })
