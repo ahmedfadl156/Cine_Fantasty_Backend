@@ -44,16 +44,6 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: "/user_logo.jpg"
     },
-    cashBalance: {
-        type: Number,
-        default: 50000000000,
-        min: [0 , "Cash balance must be a positive number"]
-    },
-    netWorth: {
-        type: Number,
-        default: 50000000000,
-        index: true
-    },
     role: {
         type: String,
         enum: ["user", "admin"],
@@ -64,15 +54,6 @@ const userSchema = new mongoose.Schema({
         default: null
     }
 }, {timestamps: true , toJSON: { virtuals: true } , toObject: { virtuals: true }});
-
-// هنعمل وقت الحفظ نبعت الفلوس بالدولار
-userSchema.virtual("cashBalanceInDollars").get(function() {
-    return this.cashBalance / 100;
-})
-
-userSchema.virtual("netWorthInDollars").get(function() {
-    return this.netWorth / 100;
-})
 
 // قبل مانحفظ اليوزر نشفر الباسورد بتاعه
 userSchema.pre("save" , async function() {

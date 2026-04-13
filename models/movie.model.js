@@ -4,7 +4,12 @@ const movieSchema = new mongoose.Schema({
     tmdbId: {
         type: Number,
         required: [true , "TMDB ID is required"],
-        unique: true,
+        index: true
+    },
+    seasonId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Season",
+        required: [true , "Season ID is required"],
         index: true
     },
     title: {
@@ -51,8 +56,10 @@ const movieSchema = new mongoose.Schema({
     }
 }, {timestamps: true , toJSON: { virtuals: true } , toObject: { virtuals: true }});
 
+movieSchema.index({tmdbId: 1 , seasonId: 1} , {unique: true})
+
 // هنعمل كومباوند يجيب الافلام الجاية وتبقى مترتبة بتاريخ النزول
-movieSchema.index({status: 1 , releaseDate: 1});
+movieSchema.index({ seasonId: 1, status: 1, releaseDate: 1 });
 
 movieSchema.virtual("basePriceInDollars").get(function() {
     return this.basePrice / 100;

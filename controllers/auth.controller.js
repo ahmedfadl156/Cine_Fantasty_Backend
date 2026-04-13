@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken"
 import catchAsync from "../utils/catchAsync.js"
 import User from "../models/user.model.js"
 import AppError from "../utils/appError.js"
+import Season from "../models/seasons.model.js"
+import StudioSeason from "../models/studioSeason.model.js"
 const signToken = (user) => {
     return jwt.sign({id: user._id , role: user.role} , process.env.JWT_SECRET , {
         expiresIn: process.env.JWT_EXPIRES_IN
@@ -44,6 +46,19 @@ export const signup = catchAsync(async (req , res , next) => {
         password: req.body.password,
     });
 
+    const currentSeason = await Season.findOne({ 
+        status: { $in: ['PRE_SEASON', 'ACTIVE'] } 
+    });
+
+    if (currentSeason) {
+        await StudioSeason.create({
+            userId: newUser._id,
+            seasonId: currentSeason._id,
+            cashBalance: currentSeason.startingBudget,
+            netWorth: currentSeason.startingBudget
+        });
+    }
+
     createSendToken(newUser , 201 , res);
 })
 
@@ -82,18 +97,50 @@ export const logout = (req , res , next) => {
 
 // جلب معلومات اليوزر الحالى
 export const getMe = catchAsync(async (req , res , next) => {
-    const id = req.user._id;
-
-    const user = await User.findById(id);
+    // بنجيب الايدى بتاع اليوزر
+    const userId = req.user._id;
+    
+    const user = await User.findById(userId);
 
     if(!user){
         return next(new AppError('User not found' , 404));
     }
 
+    // هنشوف الموسم الحالى النشط
+    const currentSeason = await Season.findOne(
+        {status: {$in: ["PRE_SEASON" , "ACTIVE"]}}
+    );
+
+    let currentStudio = null;
+
+    if(currentSeason){
+        currentStudio = await StudioSeason.findOne({
+            userId: userId,
+            seasonId: currentSeason._id
+        });
+
+        if(!currentStudio){
+            currentStudio = await StudioSeason.create({
+                userId: userId,
+                seasonId: currentSeason._id,
+                cashBalance: currentSeason.startingBudget,
+                netWorth: currentSeason.startingBudget
+            });
+        }
+    }
+
     res.status(200).json({
         status: "success",
         data: {
-            user
+            user,
+            activeSeason: currentSeason ? {
+                seasonId: currentSeason._id,
+                seasonName: currentSeason.name,
+                startDate: currentSeason.startDate,
+                endDate: currentSeason.endDate,
+                status: currentSeason.status,
+                currentStudio
+            } : null,
         }
     })
 })

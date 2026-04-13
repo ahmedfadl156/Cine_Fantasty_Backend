@@ -4,6 +4,7 @@ import { activateTodaysMovies, syncBoxOfficeRevenues, syncUpcomingMovies } from 
 cron.schedule("0 4 * * *" , () => {
     syncUpcomingMovies();
 })
+
 // cron.schedule("* * * * *" , () => {
 //     syncUpcomingMovies();
 // })
@@ -12,6 +13,6 @@ cron.schedule('0 12 * * 1', () => {
     syncBoxOfficeRevenues();
 });
 
-cron.schedule("* * * * *" , () => {
+cron.schedule("* 2 * * *" , () => {
     activateTodaysMovies();
 }) 

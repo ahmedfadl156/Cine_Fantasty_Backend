@@ -1,13 +1,35 @@
 import mongoose from "mongoose";
 import StudioAsset from "../models/studioAsset.model.js";
 import catchAsync from "../utils/catchAsync.js";
+import Season from "../models/seasons.model.js";
 
 export const getMyStudioAssets = catchAsync(async (req , res , next) => {
-const userId = req.user._id;
+        const userId = req.user._id;
+
+        // هنعمل هنا حاجة عشان لو حبينا نعمل ان اليوزر يفلتر الاستوديو بتاعه حسب المواسم اللى فاتت وشوف كان عمل فيها ايه
+        let targetSeasonId = req.query.seasonId;
+
+        if(!targetSeasonId){
+            const currentSeason = await Season.findOne({
+                status: {$in: ["ACTIVE" , "PRE_SEASON"]}
+            })
+
+            if(!currentSeason){
+                return res.status(200).json({
+                status: 'success',
+                message: 'No active season running.',
+                data: { overview: null, dashboard: null }
+                });
+            }
+            targetSeasonId = currentSeason._id;
+        }
 
         const dashboardData = await StudioAsset.aggregate([
             {
-                $match: { userId: new mongoose.Types.ObjectId(userId) }
+                $match: { 
+                    userId: new mongoose.Types.ObjectId(userId),
+                    seasonId: new mongoose.Types.ObjectId(targetSeasonId)
+                }
             },
             {
                 $lookup: {
@@ -116,6 +138,7 @@ const userId = req.user._id;
             status: 'success',
             data: {
                 overview: {
+                    seasonId: targetSeasonId,
                     totalInvestedInDollars: stats.totalInvested / 100,
                     totalFilmsOwned: stats.totalFilmsOwned
                 },

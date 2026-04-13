@@ -4,6 +4,8 @@ import AppError from "../utils/appError.js";
 import Movie from "../models/movie.model.js";
 import StudioAsset from "../models/studioAsset.model.js";
 import User from "../models/user.model.js";
+import Season from "../models/seasons.model.js";
+import StudioSeason from "../models/studioSeason.model.js";
 
 // الفانكشن المسئولة عن شراء فيلم
 export const buyMovie = catchAsync(async(req , res , next) => {
@@ -16,13 +18,25 @@ export const buyMovie = catchAsync(async(req , res , next) => {
     session.startTransaction();
 
     try {
+        // نجيب الموسم الحالى
+        const currentSeason = await Season.findOne({
+            status: {$in: ["ACTIVE" , "PRE_SEASON"]}
+        }).session(session);
+
+        if(!currentSeason){
+            return next(new AppError('The market is currently closed as there is no active season.' , 404));
+        }
         // هنجيب الفيلم علشان نشوف موجود ولا لا
-        const movie = await Movie.findById(movieId).session(session);
+        const movie = await Movie.findOne({
+            _id: movieId,
+            seasonId: currentSeason._id
+        }).session(session);
+
         if(!movie){
             return next(new AppError("No movie found with that ID" , 404))
         }
         if(movie.status !== "UPCOMING"){
-            return next(new AppError("This movie is no longer available on the market" , 400))
+            return next(new AppError("This movie is no longer available for purchase." , 400))
         }
 
         // لو الفيلم موجود وتمام هنشوف هل اليوزر شارى الفيلم دا قبل كدا
@@ -32,18 +46,31 @@ export const buyMovie = catchAsync(async(req , res , next) => {
             return next(new AppError("You already have this movie in your assets" , 400))
         }
 
-        // لو ما اشترهوش قبل كدا نشوف هل هو اصلا معاه فلوس تكفى الفيلم دا
-        const user = await User.findById(userId).session(session);
-        if(user.cashBalance < movie.basePrice){
-            throw new AppError("You don't have enough cash to buy this movie" , 400);
+        // هنجيب المحفظ بتاعت اليوزر فى السيزون دا
+        const studioSeason = await StudioSeason.findOne({
+            userId,
+            seasonId: currentSeason._id
+        }).session(session);
+
+        if(!studioSeason){
+            return next(new AppError("Your studio account for this season is not initialized." , 400));
         }
 
-        user.cashBalance -= movie.basePrice;
-        await user.save({session});
+        if(studioSeason.cashBalance < movie.basePrice){
+            return next(new AppError("Insufficient funds in your season budget.", 400));
+        }
+
+        // لو معاه فلوس واشترى نحدث الفلوس الل فى المحفظة
+        await StudioSeason.findByIdAndUpdate(
+            studioSeason._id,
+            {$inc: {cashBalance: -movie.basePrice}},
+            {session , returnDocument: "after"}
+        )
 
         const newAsset = await StudioAsset.create([{ 
-            userId: user._id,
+            userId: userId,
             movieId: movie._id,
+            seasonId: studioSeason._id,
             purchasePrice: movie.basePrice
         }], {session});
 
@@ -55,7 +82,7 @@ export const buyMovie = catchAsync(async(req , res , next) => {
             message: "Movie successfully added to your studio!",
             data: {
                 asset: newAsset[0],
-                remainingBalance: user.cashBalance / 100
+                remainingBalance: StudioSeason.cashBalance 
             }
         })
     } catch (error) {
@@ -68,12 +95,22 @@ export const buyMovie = catchAsync(async(req , res , next) => {
 
 // الفانكشن اللى هتجيب الافلام اللى لسه هتتعرض عشان نبعتها للفرونت يعرضها
 export const getUpcomingMovies = catchAsync(async (req , res , next) => {
+    const currentSeason = await Season.findOne({
+        status: {$in: ["PRE_SEASON" , "ACTIVE"]}
+    })
+
+    if(!currentSeason){
+        return res.status(200).json({ status: "success", data: { movies: [] } });
+    }
     // هنظبط ال pagination علشان الافلام لو كتير نقسمها
     const page = parseInt(req.query.page , 10) || 1;
     const limit = parseInt(req.query.limit , 10) || 20;
     const skip = (page - 1) * limit;
 
-    const query = {status: "UPCOMING"};
+    const query = {
+        status: "UPCOMING",
+        seasonId: currentSeason._id
+    };
     // هنجيب الافلام اللى لسه هتتعرض بس
     const movies = await Movie.find(query)
     .select("title posterPath backdropPath releaseDate basePrice")
@@ -99,7 +136,13 @@ export const getUpcomingMovies = catchAsync(async (req , res , next) => {
 
 // هنجيب اعلى 8 افلام هنا ال top علشان نعرضهم فى الصفحة الرئيسية
 export const getTopMovies = catchAsync(async (req , res , next) => {
-    const movies = await Movie.find().sort({popularity: -1}).limit(8).select("title posterPath backdropPath releaseDate basePrice basePriceInDollars");
+    const currentSeason = await Season.findOne({ status: { $in: ['PRE_SEASON', 'ACTIVE'] } });
+    const query = currentSeason ? { seasonId: currentSeason._id } : {};
+
+    const movies = await Movie.find(query)
+    .sort({popularity: -1})
+    .limit(8)
+    .select("title posterPath backdropPath releaseDate basePrice basePriceInDollars");
 
     if(!movies){
         return next(new AppError("No movies found" , 404))

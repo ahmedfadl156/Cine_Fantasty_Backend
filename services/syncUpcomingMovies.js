@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import Movie from "../models/movie.model.js";
+import Season from "../models/seasons.model.js";
 
 dotenv.config({ path: "config/.env" });
 
@@ -43,11 +44,19 @@ export const calculateMoviePrice = (movieData) => {
 
 // دى الفانكشن اللى بتروح تجيب الافلام اللى لسه هتتعرض
 export const syncUpcomingMovies = async () => {
-    const today = new Date();
-    const next60Days = new Date(today);
-    next60Days.setDate(today.getDate() + 60);
+    // هنجيب السزون الحالى علشان نجيب الافلام بناء على تاريخه
+    const currentSeason = await Season.findOne({
+        status: {$in: ["PRE_SEASON", "ACTIVE"]}
+    });
 
+    if(!currentSeason){
+        console.log("No active or pre-season found. Skipping movie sync.");
+        return []; 
+    }
     const formatDate = (date) => date.toISOString().split("T")[0];
+
+    const startDate = formatDate(currentSeason.startDate);
+    const endDate = formatDate(currentSeason.endDate);
 
     let currentPage = 1;
     let totalPages = 1;
@@ -57,10 +66,13 @@ export const syncUpcomingMovies = async () => {
         const params = new URLSearchParams({
             api_key: process.env.TMDB_API_KEY,
             region: "US",
-            "primary_release_date.gte": formatDate(today),
-            "primary_release_date.lte": formatDate(next60Days),
+            "primary_release_date.gte": startDate,
+            "primary_release_date.lte": endDate,
             page: currentPage.toString(),
             with_release_type: "2|3",
+            watch_region: "US",
+            without_watch_providers: "8|119|337|350|188|15", 
+            without_companies: "178464"
         });
 
         const response = await fetch(`https://api.themoviedb.org/3/discover/movie?${params.toString()}`);
@@ -83,7 +95,14 @@ export const syncUpcomingMovies = async () => {
         await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
-        const bulkOperations = allMovies.map(tmdbMovie => {
+    // هنفلتر الفالام هنحوش الافلام اللى ملهاش بوستر ومش معروفة اوى
+    const validMovies = allMovies.filter(movie => {
+        if(!movie.poster_path) return false;
+        if(movie.popularity < 3) return false;
+        return true;
+    })
+
+        const bulkOperations = validMovies.map(tmdbMovie => {
             const calculatedGamePrice = calculateMoviePrice(tmdbMovie);
 
             return {
@@ -97,7 +116,11 @@ export const syncUpcomingMovies = async () => {
                             releaseDate: new Date(tmdbMovie.release_date),
                             popularity: tmdbMovie.popularity, 
                             genres: tmdbMovie.genre_ids, 
-                            status: 'UPCOMING'
+                            seasonId: currentSeason._id,
+                        },
+                        $setOnInsert: {
+                            status: 'UPCOMING',
+                            boxOfficeRevenue: 0
                         },
                         $max: {
                             basePrice: calculatedGamePrice
@@ -115,15 +138,29 @@ export const syncUpcomingMovies = async () => {
         console.log("No new movies found.");
     }
 
-    return allMovies;
+    return validMovies;
 };
 
 
 // الفانكشن المسئولة عن اضافة الارياح بتاعت الافلام لما تتعرض فى السينما
 export const syncBoxOfficeRevenues = async () => {
     try {
+        // هنجيب السيزون اللى احنا هنسحبله الفلوس
+        const activeSeasons = await Season.findOne({
+            status: {$in: ["ACTIVE" , "POST_SEASON"]}
+        });
+
+        if(activeSeasons.length === 0){
+            console.log("No Active or post seaseons found");
+            return;
+        }
+
+        const seasonIds = activeSeasons.map(season => season._id);
         // هنجيب الافلام اللى بتتعرض حاليا فى السينما
-        const activeMovies = await Movie.find({ status: 'IN_THEATERS' });
+        const activeMovies = await Movie.find({ 
+            status: 'IN_THEATERS',
+            seasonId: {$in: seasonIds} 
+        });
 
         if(activeMovies.length === 0){
             console.log("No movies currently in the theaters.");
@@ -171,11 +208,19 @@ export const syncBoxOfficeRevenues = async () => {
 // فانكشن هتشتغل كل يوم الساعة 12 فى بداية اليوم وتشوف الافلام اللى التاريخ انها هتتعرض انهاردة علشان تحدث حالتها
 export const activateTodaysMovies = async () => {
     try {
+        const activeSeason = await Season.findOne({status: "ACTIVE"});
+
+        if(!activeSeason){
+            console.log("No active season found.");
+            return;
+        }
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
         const result = await Movie.updateMany(
             {
+                seasonId: activeSeason._id,
                 status: "UPCOMING",
                 releaseDate: {$lte: today}
             },

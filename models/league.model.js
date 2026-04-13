@@ -24,6 +24,12 @@ const leagueSchema = new mongoose.Schema({
         ref: "User",
         index: true
     },
+    seasonId: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: [true , "Season ID is required"],
+        ref: "Season",
+        index: true
+    },
     members: {
         type: [{
             type: mongoose.Schema.Types.ObjectId,
