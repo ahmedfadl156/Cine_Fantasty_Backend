@@ -24,6 +24,7 @@ export const getMyStudioAssets = catchAsync(async (req , res , next) => {
             targetSeasonId = currentSeason._id;
         }
 
+
         const dashboardData = await StudioAsset.aggregate([
             {
                 $match: { 

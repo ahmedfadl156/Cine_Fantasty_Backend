@@ -6,6 +6,7 @@ import StudioAsset from "../models/studioAsset.model.js";
 import User from "../models/user.model.js";
 import Season from "../models/seasons.model.js";
 import StudioSeason from "../models/studioSeason.model.js";
+import ActivityLog from "../models/ActivityLog.model.js";
 
 // الفانكشن المسئولة عن شراء فيلم
 export const buyMovie = catchAsync(async(req , res , next) => {
@@ -70,9 +71,22 @@ export const buyMovie = catchAsync(async(req , res , next) => {
         const newAsset = await StudioAsset.create([{ 
             userId: userId,
             movieId: movie._id,
-            seasonId: studioSeason._id,
+            seasonId: currentSeason._id,
             purchasePrice: movie.basePrice
         }], {session});
+
+        await ActivityLog.create([{
+            userId: userId,
+            seasonId: currentSeason._id,
+            type: 'MOVIE_PURCHASED',
+            data: {
+                movieId: movie._id,
+                movieTitle: movie.title,
+                moviePoster: movie.posterPath,
+                purchasePrice: movie.basePrice,
+                studioName: req.user.studioName 
+            }
+        }], { session });
 
         await session.commitTransaction();
         session.endSession();

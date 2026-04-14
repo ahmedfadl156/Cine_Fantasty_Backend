@@ -3,6 +3,8 @@ import AppError from "../utils/appError.js";
 import League from "../models/league.model.js";
 import Season from "../models/seasons.model.js";
 import StudioSeason from "../models/studioSeason.model.js";
+import mongoose from "mongoose";
+import ActivityLog from "../models/ActivityLog.model.js";
 
 // انشاء الدورى
 export const createLeague = catchAsync(async(req , res , next) => {
@@ -135,6 +137,80 @@ export const joinLeague = catchAsync(async(req , res , next) => {
     return next(new AppError("Could not join the league at this time." , 500))
 })
 
+export const joinPublicLeague = catchAsync(async (req , res , next) => {
+    const leagueId = req.params.leagueId;
+    const userId = req.user._id;
+
+    if(!mongoose.Types.ObjectId.isValid(leagueId))  {
+        return next(new AppError("Invalid league id." , 400));
+    }
+
+    const targetLeague = await League.findById(leagueId).populate("seasonId");
+    // بنعمل هنا اشتيك على شوية حالات ممكن تقابلنا زى ان الدورى مش موجود او اليوزر فى الدورى اصلا او الورى مليان او الدورى برايفت
+    if(!targetLeague){
+        return next(new AppError("League not found." , 404));
+    }
+
+    if(!targetLeague.isPublic){
+        return next(new AppError('This league is private. You need an invite code to join.', 403));
+    }
+
+    if(['POST_SEASON' , 'CLOSED'].includes(targetLeague.seasonId.status)){
+        return next(new AppError('This league is closed. You cannot join.', 403));
+    }
+
+    if(targetLeague.members.includes(userId)){
+        return next(new AppError('You are already a member of this league.', 400));
+    }
+
+    if(targetLeague.members.length >= 100){
+        return next(new AppError('This league has reached its maximum capacity of 100 members.', 403));
+    }
+
+    // هنشوف لو عدا من كل الحالات دى هل معاه محفظة ومسجل فى السيزون دا
+    const hasStudio = await StudioSeason.exists({
+        userId: userId,
+        seasonId: targetLeague.seasonId._id
+    })
+
+    if(!hasStudio) {
+        return next(new AppError('You must initialize your studio for this season before joining a league.', 403));
+    }
+
+    // لو تمام ندخله الدورى
+    const joinedLeague = await League.findOneAndUpdate(
+        {
+            _id: leagueId,
+            isPublic: true,
+            members: {$ne: userId},
+            "members.99": {$exists: false}
+        },
+        {
+            $addToSet: {members: userId}
+        },
+        {
+            returnDocument: "after",
+            runValidators: true
+        }
+    )
+
+    if(joinedLeague){
+        return res.status(200).json({
+            status: 'success',
+            message: `Successfully joined ${joinedLeague.name}!`,
+            data: {
+                league: {
+                    _id: joinedLeague._id,
+                    name: joinedLeague.name,
+                    memberCount: joinedLeague.members.length
+                }
+            }
+        });
+    }
+
+    return next(new AppError('Could not join the league at this time. It may have just reached full capacity.', 409)); 
+})
+
 // دى الفانكشن المسئولة انها تجيب الدوريات العامة وتعرضها لليوزرز
 export const getPublicLeagues = catchAsync(async(req , res , next) => {
     // هنجيب الايدى بتاع اليوزر 
@@ -262,5 +338,200 @@ export const getMyLeagues = catchAsync(async (req , res , next) => {
             data: {
                 leagues: myLeagues
             }
+    });
+})
+
+// هنا هنجيب معلومات وتفاصيل الدورى عن طريق الايدى
+export const getLeagueById = catchAsync(async (req , res , next) => {
+    const leagueId = req.params.leagueId;
+    const userId = req.user._id;
+
+    if(!mongoose.Types.ObjectId.isValid(leagueId)){
+        return next(new AppError("Invalid league Id" , 400));
+    }
+
+    const leagueDetails = await League.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(leagueId),
+                members: new mongoose.Types.ObjectId(userId)
+            }
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "ownerId",
+                foreignField: "_id",
+                as: "owner"
+            }
+        },
+        {
+            $unwind: '$owner'
+        },
+        {
+            $lookup: {
+                from: "seasons",
+                localField: "seasonId",
+                foreignField: "_id",
+                as: "season"
+            }
+        },
+        {
+            $unwind: '$season'
+        },
+        {
+            $project: {
+                _id: 1,
+                name: 1,
+                inviteCode: 1,
+                isPublic: 1,
+                memberCount: {$size: '$members'},
+                ownerName: '$owner.studioName',
+                seasonInfo: {
+                    id: '$season._id',
+                    name: '$season.name',
+                    status: '$season.status'
+                },
+                role: {
+                    $cond: {
+                        if: {$eq: ['$ownerId' , new mongoose.Types.ObjectId(userId)]},
+                        then: "OWNER",
+                        else: "MEMBER"
+                    }
+                },
+                createdAt: 1
+            }
+        }
+    ]);
+
+    if(!leagueDetails || leagueDetails.length === 0){
+        return next(new AppError('League not found or you do not have permission to view it.', 404));
+    }
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            league: leagueDetails[0]
+        }
+    });
+})
+
+// هنا هنجيب الترتيب بتاع اليوزر فى الدورى اللى هما فيه علشان نعرضهم فى الفرونت مترتبين
+export const getLeagueLeaderboard = catchAsync(async (req , res , next) => { 
+    const leagueId = req.params.leagueId;
+    const userId = req.user._id;
+
+    if(!mongoose.Types.ObjectId.isValid(leagueId)){
+        return next(new AppError("Invalid league id" , 400));
+    }
+
+    const targetLeague = await League.findById(leagueId);
+
+    if(!targetLeague){
+        return next(new AppError("League not found" , 404));
+    }
+
+    if(!targetLeague.members.includes(userId)){
+        return next(new AppError('Access denied. You are not a member of this league.', 403));
+    }
+
+    const leaderboard = await StudioSeason.aggregate([
+        {
+            $match: {
+                seasonId: targetLeague.seasonId,
+                userId: {$in: targetLeague.members}
+            }
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "userId",
+                foreignField: "_id",
+                as: "user"
+            }
+        },
+        {
+            $unwind: "$user"
+        },
+        {
+            $setWindowFields: {
+                sortBy: {netWorth: -1},
+                output: {
+                    rank: {
+                        $documentNumber: {}
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                userId: "$userId",
+                rank: 1,
+                studioName: "$user.studioName",
+                netWorthInDollars: {$divide: ["$netWorth" , 100]},
+                cashBalanceInDollars: {$divide: ["$cashBalance" , 100]},
+                isMe: {$eq: ['$userId' , new mongoose.Types.ObjectId(userId)]}
+            }
+        }
+    ]);
+
+    const myRank = leaderboard.find(player => player.isMe === true) || null;
+
+    res.status(200).json({
+        status: 'success',
+        data: {
+            leagueDetails: {
+                id: targetLeague._id,
+                name: targetLeague.name,
+                totalMembers: targetLeague.members.length
+            },
+            myStats: myRank,
+            leaderboard 
+        }
+    });
+})
+
+export const getLeagueActivityFeed = catchAsync(async (req , res , next) => {
+    const leagueId = req.params.leagueId;
+    const userId = req.user._id;
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const targetLeague = await League.findById(leagueId);
+
+    if(!targetLeague){
+        return next(new AppError("League Not Found" , 404));
+    }
+
+    if(!targetLeague.members.includes(userId)){
+        return next(new AppError('Access denied. You are not a member of this league.', 403));
+    }
+
+    const feed = await ActivityLog.find({
+        seasonId: targetLeague.seasonId,
+        userId: {$in: targetLeague.members}
+    }).sort({createdAt: -1}).skip(skip).limit(limit).select('-__v -updatedAt');
+
+    res.status(200).json({
+        status: 'success',
+        results: feed.length,
+        pagination: {
+            currentPage: page,
+            limit: limit
+        },
+        data: {
+            feed: feed.map(log => ({
+                id: log._id,
+                type: log.type,
+                timestamp: log.createdAt,
+                details: {
+                    ...log.data,
+                    purchasePriceInDollars: log.data.purchasePrice ? log.data.purchasePrice / 100 : undefined
+                }
+            }))
+        }
     });
 })
