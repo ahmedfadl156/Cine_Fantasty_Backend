@@ -6,6 +6,8 @@ dotenv.config({path: "config/.env"});
 
 const PORT = process.env.PORT || 5500;
 
+console.log("Server Time:", new Date().toString());
+console.log("Timezone:", Intl.DateTimeFormat().resolvedOptions().timeZone);
 const startServer = async () => {
     try {
         await connectToDB();
