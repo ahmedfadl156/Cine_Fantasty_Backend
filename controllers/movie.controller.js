@@ -5,9 +5,11 @@ import { calculateMoviePrice, syncUpcomingMovies } from "../services/syncUpcomin
 import AppError from "../utils/appError.js";
 import catchAsync from "../utils/catchAsync.js";
 import NodeCache from "node-cache";
+import redisClient from "../config/redisClient.js";
 
 const tmdbCache = new NodeCache({stdTTL: 86400});
 
+// **************** دى فانشكنز خاصه باليوزر هتظهر فى الفرونت ****************
 export const testSync = catchAsync(async (req, res, next) => {
     const sampleMovies = await syncUpcomingMovies();
     const movies = Array.isArray(sampleMovies) ? sampleMovies : [];
@@ -92,5 +94,95 @@ export const getMovieDetails = catchAsync(async (req , res , next) => {
             },
             movieDetails: externalStats 
         }
+    });
+})
+
+
+
+// ************** دى الفانكشنز الخاصة بالادمن ********************
+// دى الفاتكشن اللى هتجيب كل الافلام للادمن
+export const getAdminMovies = catchAsync(async(req , res , next) => {
+    const query = {};
+    // هنظبط ال query عشان لو الاجمن عايز يفلتر او يبحث عن اسم معين
+    if(req.query.seasonId) query.seasonId = req.query.seasonId;
+    if(req.query.status) query.status = req.query.status;
+    if(req.query.search) {
+        query.title = {$regex: req.query.search , $options: "i"};
+    }
+
+    // هنجهز ال pagination
+    const page = parseInt(req.query.page , 10) || 1;
+    const limit = parseInt(req.query.limit , 10) || 20;
+    const skip = (page - 1) * limit;
+
+    const movies = await Movie.find(query)
+    .populate('seasonId' , 'name status')
+    .sort({releaseDate: 1})
+    .skip(skip).limit(limit);
+
+    const totalMovies = await Movie.countDocuments(query);
+
+    res.status(200).json({
+        status: "success",
+        results: movies.length,
+        pagination:{
+            currentPage: page,
+            totalPages: Math.ceil(totalMovies / limit),
+            totalMovies
+        },
+        data: { movies }
+    })
+})
+
+// دى الفانكشن الخاصة عن تعديل الافلام لو احتاجت تعديل او تحديث
+export const updateMovieAdmin = catchAsync(async (req , res , next) => {
+    const movieId = req.params.id;
+    const {status , basePriceInDollars , boxOfficePriceInDollars , releaseDate} = req.body;
+
+    const movie = await Movie.findById(movieId)
+    if (!movie) {
+        return next(new AppError("No movie found with that ID" , 404))
+    }
+
+    // نجهز التحديثات اللى الادمن يعتها
+    if(status) movie.status = status;
+    if(releaseDate) movie.releaseDate = new Date(releaseDate);
+    if(basePriceInDollars !== undefined) movie.basePrice = basePriceInDollars * 100;
+    if(boxOfficePriceInDollars !== undefined) movie.boxOfficeRevenue = basePriceInDollars * 100;
+
+    await movie.save();
+
+    // هنمسح الكاش القديم علشان التحديثات تظهر لليوزرز علطول
+    const seasonIdStr = movie.seasonId.toString();
+
+    const upcomingKeys = await redisClient.keys(`upcomingMovies:${seasonIdStr}:*`);
+    if (upcomingKeys.length > 0) {
+        await redisClient.del(upcomingKeys);
+    }
+    console.log(`[ADMIN] Movie ${movie.title} manually updated. Cache cleared for season ${seasonIdStr}.`);
+
+    res.status(200).json({
+        status: 'success',
+        message: `Movie ${movie.title} has been manually updated.`,
+        data: { movie }
+    });
+})
+
+
+// هنا هنعمل زى زرار للادمن لو حب انه يتحكم فى تحديث الافلام من غير ما يستنى ال CRON JOB
+export const forceSyncMovies = catchAsync(async (req , res , next) => {
+    const resultMovies = await syncUpcomingMovies();
+
+    if(!resultMovies  || resultMovies.length === 0){
+        return res.status(200).json({
+            status: 'success',
+            message: 'Sync executed, but no new updates or active season found.'
+        });
+    }
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Manual TMDB sync completed successfully. The market is now up to date!',
+        results: resultMovies.length
     });
 })

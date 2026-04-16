@@ -37,7 +37,11 @@ export const buyMovie = catchAsync(async(req , res , next) => {
         if(!movie){
             return next(new AppError("No movie found with that ID" , 404))
         }
-        if(movie.status !== "UPCOMING"){
+        if(movie.status !== "UPCOMING" ){
+            return next(new AppError("This movie is no longer available for purchase." , 400))
+        }
+
+        if(movie.status === "UPCOMING" && new Date(movie.releaseDate).toDateString() <= new Date().toDateString()){
             return next(new AppError("This movie is no longer available for purchase." , 400))
         }
 
