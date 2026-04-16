@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import Movie from "../models/movie.model.js";
 import Season from "../models/seasons.model.js";
+import redisClient from "../config/redisClient.js";
 
 dotenv.config({ path: "config/.env" });
 
@@ -134,6 +135,13 @@ export const syncUpcomingMovies = async () => {
     if (bulkOperations.length > 0) {
         const result = await Movie.bulkWrite(bulkOperations);
         console.log(`Sync completed. ${result.upsertedCount} new movies added, ${result.modifiedCount} movies updated.`);
+        if(result.modifiedCount > 0 || result.upsertedCount > 0){
+            await redisClient.del(`topMovies:${currentSeason._id}`);
+            const upcomingKeys = await redisClient.keys(`upcomingMovies:${currentSeason._id}:*`);
+            if(upcomingKeys.length > 0){
+                await redisClient.del(upcomingKeys);
+            }
+        }
     } else {
         console.log("No new movies found.");
     }
@@ -146,7 +154,7 @@ export const syncUpcomingMovies = async () => {
 export const syncBoxOfficeRevenues = async () => {
     try {
         // هنجيب السيزون اللى احنا هنسحبله الفلوس
-        const activeSeasons = await Season.findOne({
+        const activeSeasons = await Season.find({
             status: {$in: ["ACTIVE" , "POST_SEASON"]}
         });
 
@@ -199,6 +207,10 @@ export const syncBoxOfficeRevenues = async () => {
         if(bulkOperations.length > 0){
             const result = await Movie.bulkWrite(bulkOperations);
             console.log(`Revenue Sync Complete: ${result.modifiedCount} movies updated with fresh cash!`);
+
+            for(const seasonId of seasonIds){
+                await redisClient.del(`topMovies:${seasonId}`)
+            }
         }
     } catch (error) {
         console.error('CRITICAL ERROR in Revenue Sync Job:', error.message);
@@ -231,6 +243,12 @@ export const activateTodaysMovies = async () => {
 
         if(result.modifiedCount > 0){
             console.log(`${result.modifiedCount} movies activated.`);
+
+            await redisClient.del(`topMovies:${activeSeason._id}`)
+            const upcomingKeys = await redisClient.keys(`upcomingMovies:${activeSeason._id}:*`);
+            if (upcomingKeys.length > 0) {
+                await redisClient.del(upcomingKeys);
+            }
         }
     } catch (error) {
         console.error("Activation Error: " , error)

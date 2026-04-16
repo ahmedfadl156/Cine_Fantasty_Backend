@@ -27,6 +27,7 @@
     "nanoid": "^5.1.7",
     "node-cache": "^5.1.2",
     "node-cron": "^4.2.1",
+    "redis": "^5.12.1",
     "validator": "^13.15.35"
   },
   "devDependencies": {

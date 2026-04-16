@@ -79,6 +79,9 @@ export const login = catchAsync(async (req , res , next) => {
         return next(new AppError('Incorrect email or password' , 401));
     }
 
+    user.lastLogin = Date.now();
+    await user.save();
+
     createSendToken(user , 200 , res);
 })
 

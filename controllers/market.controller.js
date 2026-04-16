@@ -7,6 +7,7 @@ import User from "../models/user.model.js";
 import Season from "../models/seasons.model.js";
 import StudioSeason from "../models/studioSeason.model.js";
 import ActivityLog from "../models/ActivityLog.model.js";
+import redisClient from "../config/redisClient.js";
 
 // الفانكشن المسئولة عن شراء فيلم
 export const buyMovie = catchAsync(async(req , res , next) => {
@@ -121,6 +122,16 @@ export const getUpcomingMovies = catchAsync(async (req , res , next) => {
     const limit = parseInt(req.query.limit , 10) || 20;
     const skip = (page - 1) * limit;
 
+    const cacheKey = `upcomingMovies:${currentSeason._id}:${page}:${limit}`;
+
+    const cachedData = await redisClient.get(cacheKey);
+
+    if(cachedData){
+        console.log("Getting data from cache");
+        const parsedData = JSON.parse(cachedData);
+        return res.status(200).json(parsedData);
+    }
+
     const query = {
         status: "UPCOMING",
         seasonId: currentSeason._id
@@ -134,7 +145,7 @@ export const getUpcomingMovies = catchAsync(async (req , res , next) => {
     const totalMovies = await Movie.countDocuments(query);
     const totalPages = Math.ceil(totalMovies / limit);
 
-    res.status(200).json({
+    const responsePayload = {
         status: "success",
         results: movies.length,
         pagination: {
@@ -145,7 +156,11 @@ export const getUpcomingMovies = catchAsync(async (req , res , next) => {
             hasPreviousPage: page > 1
         },
         data: {movies}
-    })
+    }
+
+    await redisClient.setEx(cacheKey , 86400 , JSON.stringify(responsePayload))
+
+    res.status(200).json(responsePayload)
 })
 
 // هنجيب اعلى 8 افلام هنا ال top علشان نعرضهم فى الصفحة الرئيسية
@@ -153,6 +168,20 @@ export const getTopMovies = catchAsync(async (req , res , next) => {
     const currentSeason = await Season.findOne({ status: { $in: ['PRE_SEASON', 'ACTIVE'] } });
     const query = currentSeason ? { seasonId: currentSeason._id } : {};
 
+    const cacheKey = `topMovies:${currentSeason ? currentSeason._id : ''}`
+
+    const cachedData = await redisClient.get(cacheKey);
+
+    if(cachedData){
+        console.log('Getting top movies from cache');
+        return res.status(200).json({
+            status: "success",
+            data: {
+                movies: JSON.parse(cachedData)
+            }
+        })
+    }
+    
     const movies = await Movie.find(query)
     .sort({popularity: -1})
     .limit(8)
@@ -161,6 +190,8 @@ export const getTopMovies = catchAsync(async (req , res , next) => {
     if(!movies){
         return next(new AppError("No movies found" , 404))
     };
+
+    await redisClient.setEx(cacheKey , 86400 , JSON.stringify(movies))
 
     res.status(200).json({
         status: "success",
