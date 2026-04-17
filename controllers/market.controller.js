@@ -170,7 +170,7 @@ export const getUpcomingMovies = catchAsync(async (req , res , next) => {
 // هنجيب اعلى 8 افلام هنا ال top علشان نعرضهم فى الصفحة الرئيسية
 export const getTopMovies = catchAsync(async (req , res , next) => {
     const currentSeason = await Season.findOne({ status: { $in: ['PRE_SEASON', 'ACTIVE'] } });
-    const query = currentSeason ? { seasonId: currentSeason._id } : {};
+    const query = currentSeason ? { seasonId: currentSeason._id , status: "UPCOMING" } : {status: "UPCOMING"};
 
     const cacheKey = `topMovies:${currentSeason ? currentSeason._id : ''}`
 
