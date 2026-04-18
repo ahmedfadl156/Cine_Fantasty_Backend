@@ -12,6 +12,7 @@ import movieRouter from "./routes/movie.routes.js";
 import studioRouter from "./routes/studio.routes.js";
 import leaguesRouter from "./routes/leagues.routes.js";
 import seasonRouter from "./routes/season.routes.js";
+import dashboardRouter from "./routes/dashboard.routes.js";
 dotenv.config({path: "config/.env"})
 const app = express();
 
@@ -35,6 +36,7 @@ app.use("/api/v1/movie" , movieRouter)
 app.use("/api/v1/studio" , studioRouter)
 app.use("/api/v1/leagues" , leaguesRouter)
 app.use("/api/v1/seasons" , seasonRouter)
+app.use("/api/v1/dashboard" , dashboardRouter)
 
 app.all("/{*path}" , (req , res , next) => {
     next(new AppError(`Can't Find ${req.originalUrl} on this server!` , 404))

@@ -22,7 +22,6 @@ const createSendToken = (user , statusCode , res) => {
     }
 
     if(process.env.NODE_ENV === "production") cookieOptions.secure = true;
-    console.log(token)
 
     res.cookie("cineFantasty_Jwt" , token , cookieOptions)
 

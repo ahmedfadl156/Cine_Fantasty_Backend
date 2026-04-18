@@ -17,6 +17,7 @@ export const testSync = catchAsync(async (req, res, next) => {
     res.status(200).json({
         status: 'success',
         message: 'Sync successful! Data saved to MongoDB.',
+        result: movies.length,
         sample_prices: movies.map(m => ({
             title: m.title,
             popularity: m.popularity,

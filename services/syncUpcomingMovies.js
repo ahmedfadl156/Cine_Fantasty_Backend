@@ -54,9 +54,13 @@ export const syncUpcomingMovies = async () => {
         console.log("No active or pre-season found. Skipping movie sync.");
         return []; 
     }
-    const formatDate = (date) => date.toISOString().split("T")[0];
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const formatDate = (date) => new Date(date).toISOString().split("T")[0];    
 
     const startDate = formatDate(currentSeason.startDate);
+    const fetchStartDate = startDate < today ? formatDate(today) : formatDate(startDate);
     const endDate = formatDate(currentSeason.endDate);
 
     let currentPage = 1;
@@ -67,13 +71,13 @@ export const syncUpcomingMovies = async () => {
         const params = new URLSearchParams({
             api_key: process.env.TMDB_API_KEY,
             region: "US",
-            "primary_release_date.gte": startDate,
+            "primary_release_date.gte": fetchStartDate,
             "primary_release_date.lte": endDate,
             page: currentPage.toString(),
-            with_release_type: "2|3",
+            with_release_type: "3",
             watch_region: "US",
             without_watch_providers: "8|119|337|350|188|15", 
-            without_companies: "178464"
+            without_companies: "178464",
         });
 
         const response = await fetch(`https://api.themoviedb.org/3/discover/movie?${params.toString()}`);
@@ -100,6 +104,9 @@ export const syncUpcomingMovies = async () => {
     const validMovies = allMovies.filter(movie => {
         if(!movie.poster_path) return false;
         if(movie.popularity < 3) return false;
+
+        const releaseDate = new Date(movie.release_date);
+        if(releaseDate < today) return false;
         return true;
     })
 
@@ -108,7 +115,7 @@ export const syncUpcomingMovies = async () => {
 
             return {
                 updateOne: {
-                    filter: { tmdbId: tmdbMovie.id },
+                    filter: { tmdbId: tmdbMovie.id , seasonId: currentSeason._id },
                     update: {
                         $set: {
                             title: tmdbMovie.title,
