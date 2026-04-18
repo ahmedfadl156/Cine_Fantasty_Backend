@@ -13,6 +13,7 @@ import studioRouter from "./routes/studio.routes.js";
 import leaguesRouter from "./routes/leagues.routes.js";
 import seasonRouter from "./routes/season.routes.js";
 import dashboardRouter from "./routes/dashboard.routes.js";
+import userRouter from "./routes/user.routes.js";
 dotenv.config({path: "config/.env"})
 const app = express();
 
@@ -31,6 +32,7 @@ app.use(express.urlencoded({ extended: false }));
 
 //ROUTES
 app.use("/api/v1/auth" , authRouter)
+app.use("/api/v1/user" , userRouter)
 app.use("/api/v1/market" , marketRouter)
 app.use("/api/v1/movie" , movieRouter)
 app.use("/api/v1/studio" , studioRouter)

@@ -12,7 +12,7 @@ const signToken = (user) => {
     })
 } 
 
-const createSendToken = (user , statusCode , res) => {
+export const createSendToken = (user , statusCode , res) => {
     const token = signToken(user);
 
     const cookieOptions = {
