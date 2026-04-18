@@ -41,8 +41,14 @@ export const buyMovie = catchAsync(async(req , res , next) => {
             return next(new AppError("This movie is no longer available for purchase." , 400))
         }
 
-        if(movie.status === "UPCOMING" && new Date(movie.releaseDate).toDateString() <= new Date().toDateString()){
-            return next(new AppError("This movie is no longer available for purchase." , 400))
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const releaseDate = new Date(movie.releaseDate);
+        releaseDate.setHours(0, 0, 0, 0);
+
+        if(movie.status === "UPCOMING" && releaseDate.getTime() <= today.getTime()){
+            return next(new AppError("This movie has reached its release date and is locked." , 400))
         }
 
         // لو الفيلم موجود وتمام هنشوف هل اليوزر شارى الفيلم دا قبل كدا
