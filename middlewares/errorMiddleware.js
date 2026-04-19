@@ -60,6 +60,12 @@ const errorMiddleware = (err, req, res, next) => {
     error.statusCode = customErr.statusCode;
 }
 
+    if(err.statusCode === 400 && req.originalUrl.includes("/signup")){
+        console.error('🚨 Signup Failed!');
+        console.error('Reason:', err.message);
+        console.error('Data Sent by User:', req.body.email , req.body.studioName);
+    }
+
     const statusCode = error.statusCode || 500;
     const status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
 
