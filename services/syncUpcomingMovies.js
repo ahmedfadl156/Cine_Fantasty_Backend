@@ -2,6 +2,8 @@ import dotenv from "dotenv";
 import Movie from "../models/movie.model.js";
 import Season from "../models/seasons.model.js";
 import redisClient from "../config/redisClient.js";
+import StudioAsset from "../models/studioAsset.model.js";
+import StudioSeason from "../models/studioSeason.model.js";
 
 dotenv.config({ path: "config/.env" });
 
@@ -156,6 +158,56 @@ export const syncUpcomingMovies = async () => {
     return validMovies;
 };
 
+// الفانكشن اللى هتحسب ال net worth للاعيبة وترتبهم
+export const calculateAllNetWorth = async (activeSeasons) => {
+    try {
+        for(const season of activeSeasons){
+            const seasonId = season._id;
+            const STARTING_NET_WORTH = season.netWorth || 40000000000;
+            console.log(`Calculating net worth for season ${seasonId}`);
+    
+            const userProfits = await StudioAsset.aggregate([
+                {
+                    $lookup: {
+                        from: "movies",
+                        localField: "movieId",
+                        foreignField: "_id",
+                        as: "movieData"
+                    }
+                },
+                {
+                    $unwind: "$movieData"
+                },
+                {
+                    $group: {
+                        _id: "$userId",
+                        totalRevenue: {$sum: {$ifNull: ["$movieData.boxOfficeRevenue", 0]}}
+                    }
+                }
+            ]);
+            if(userProfits.length === 0) continue;
+    
+            const bulkOperations = userProfits.map(player => ({
+                updateOne: {
+                    filter: {userId: player._id , seasonId: seasonId},
+                    update: {
+                        $set: {
+                            netWorth: STARTING_NET_WORTH + player.totalRevenue
+                        }
+                    }
+                }
+            }));
+    
+            if(bulkOperations.length > 0){
+                await StudioSeason.bulkWrite(bulkOperations);
+            }
+        }
+        console.log("All NetWorths updated successfully across all active seasons!");
+    } catch (error) {
+        console.error('CRITICAL ERROR in NetWorth Recalculation:', error.message);
+    }
+}
+
 
 // الفانكشن المسئولة عن اضافة الارياح بتاعت الافلام لما تتعرض فى السينما
 export const syncBoxOfficeRevenues = async () => {
@@ -214,7 +266,8 @@ export const syncBoxOfficeRevenues = async () => {
         if(bulkOperations.length > 0){
             const result = await Movie.bulkWrite(bulkOperations);
             console.log(`Revenue Sync Complete: ${result.modifiedCount} movies updated with fresh cash!`);
-
+            // بعد مانجيب الارباح هنحسب ال Net Worth لليوزرز
+            await calculateAllNetWorth(activeSeasons)
             for(const seasonId of seasonIds){
                 await redisClient.del(`topMovies:${seasonId}`)
             }
@@ -261,3 +314,4 @@ export const activateTodaysMovies = async () => {
         console.error("Activation Error: " , error)
     }
 }
+

@@ -1,11 +1,12 @@
 import dotenv from "dotenv";
 dotenv.config({path: "config/.env"})
 import Movie from "../models/movie.model.js";
-import { calculateMoviePrice, syncUpcomingMovies } from "../services/syncUpcomingMovies.js";
+import { calculateAllNetWorth, calculateMoviePrice, syncUpcomingMovies } from "../services/syncUpcomingMovies.js";
 import AppError from "../utils/appError.js";
 import catchAsync from "../utils/catchAsync.js";
 import NodeCache from "node-cache";
 import redisClient from "../config/redisClient.js";
+import Season from "../models/seasons.model.js";
 
 const tmdbCache = new NodeCache({stdTTL: 86400});
 
@@ -145,14 +146,27 @@ export const updateMovieAdmin = catchAsync(async (req , res , next) => {
         return next(new AppError("No movie found with that ID" , 404))
     }
 
+    const isRevenueUpdated = boxOfficePriceInDollars !== undefined && 
+                            (boxOfficePriceInDollars * 100) !== movie.boxOfficeRevenue
+
     // نجهز التحديثات اللى الادمن يعتها
     if(status) movie.status = status;
     if(releaseDate) movie.releaseDate = new Date(releaseDate);
     if(basePriceInDollars !== undefined) movie.basePrice = basePriceInDollars * 100;
-    if(boxOfficePriceInDollars !== undefined) movie.boxOfficeRevenue = basePriceInDollars * 100;
+
+    if(boxOfficePriceInDollars !== undefined){
+        movie.boxOfficeRevenue = boxOfficePriceInDollars * 100;
+    }
 
     await movie.save();
 
+    // لو الارباح اتحدثت نحدث ال networth لليوزرز
+    if(isRevenueUpdated){
+        const season = await Season.findById(movie.seasonId);
+        if(season){
+            await calculateAllNetWorth([season]);
+        }
+    }
     // هنمسح الكاش القديم علشان التحديثات تظهر لليوزرز علطول
     const seasonIdStr = movie.seasonId.toString();
 
