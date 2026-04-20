@@ -56,6 +56,11 @@ const userSchema = new mongoose.Schema({
     lastLogin: {
         type: Date,
         default: null
+    },
+    accountStatus: {
+        type: String,
+        enum: ["ACTIVE" , "SUSPENDED" , "BANNED"],
+        default: "ACTIVE"
     }
 }, {timestamps: true , toJSON: { virtuals: true } , toObject: { virtuals: true }});
 
