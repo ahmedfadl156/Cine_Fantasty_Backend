@@ -4,6 +4,7 @@ import Season from "../models/seasons.model.js";
 import StudioAsset from "../models/studioAsset.model.js";
 import StudioSeason from "../models/studioSeason.model.js";
 import User from "../models/user.model.js";
+import AppError from "../utils/appError.js";
 import catchAsync from "../utils/catchAsync.js";
 
 export const getCommandCenterStats = catchAsync(async (req , res , next) => {
@@ -191,42 +192,49 @@ export const sanitizeMarketDatabase = async (req, res) => {
 };
 
 
-// دى فانكشن الادمن من خلالها هيحسب الربح لفيلم نزل منصة مش سينما
-export const applyStreamingRevenue = catchAsync(async (req , res , next) => {
+export const applyStreamingRevenue = catchAsync(async (req, res, next) => {
     const { movieId } = req.params;
 
     const movie = await Movie.findById(movieId);
     if (!movie) {
-        return next(new AppError("No movie found with that ID" , 404))
+        return next(new AppError("No movie found with that ID", 404));
     }
 
-    // لو الفيلم موجود هنجيب الداتا بتاعت الفيلم دا اللى بناء عليها هنحسب السعر بتاع الربخ
     const response = await fetch(`https://api.themoviedb.org/3/movie/${movie.tmdbId}?api_key=${process.env.TMDB_API_KEY}`);
 
-    if(!response.ok){
+    if (!response.ok) {
         return res.status(500).json({
             status: "fail",
             message: "Failed to fetch TMDB data"
-        })
+        });
     }
 
     const tmdbData = await response.json();
 
-    // الالجوريزم اللى هنحسب نباء عليها
     const voteAverage = tmdbData.vote_average || 0;
     const voteCount = tmdbData.vote_count || 0;
     const currentPopularity = tmdbData.popularity || 0;
 
-    if(voteCount < 100){
+    if (voteCount < 50) {
         return next(new AppError("Not enough votes yet to calculate a fair revenue. Try again in a few days.", 400));
     }
 
-    const qualityScore = Math.max(0.1 , voteAverage / 10);
-    const hypeScore = Math.min(2.0 , Math.max(0.5 , currentPopularity / 50));
 
-    let multiplier = 0.5 + (qualityScore * hypeScore * 2.5);
+    const qualityFactor = Math.pow(voteAverage / 10, 2);
 
-    multiplier = Math.min(4.5 , Math.max(0.3 , multiplier));
+
+    const hypeFactor = Math.min(1.5, currentPopularity / 500);
+
+
+    const confidenceWeight = Math.min(1.0, voteCount / 500);
+
+    // 4. Base ROI (الفيلم كدة كدة بيجيب 40% من قيمته لمجرد عرضه على المنصة)
+    const baseROI = 0.4;
+
+    // 5. Final Calculation
+    let multiplier = baseROI + (qualityFactor * hypeFactor * confidenceWeight * 2.5);
+
+    multiplier = Math.min(3.5, Math.max(0.3, multiplier));
 
     const basePriceInCents = movie.basePrice;
     const estimateRevenueInCents = Math.round(basePriceInCents * multiplier);
@@ -240,10 +248,11 @@ export const applyStreamingRevenue = catchAsync(async (req , res , next) => {
         data: {
             movieTitle: movie.title,
             tmdbRating: voteAverage,
+            voteCount: voteCount,
             popularity: currentPopularity,
             calculatedMultiplier: multiplier.toFixed(2) + "x",
             basePrice: `$${(basePriceInCents / 100).toLocaleString()}`,
-            finalEstimatedRevenue: `$${(estimatedRevenueInCents / 100).toLocaleString()}`
+            finalEstimatedRevenue: `$${(estimateRevenueInCents / 100).toLocaleString()}`
         }
     });
-})
+});

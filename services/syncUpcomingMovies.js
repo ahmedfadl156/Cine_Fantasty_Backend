@@ -62,7 +62,8 @@ export const syncUpcomingMovies = async () => {
     const formatDate = (date) => new Date(date).toISOString().split("T")[0];    
 
     const startDate = formatDate(currentSeason.startDate);
-    const fetchStartDate = startDate < today ? formatDate(today) : formatDate(startDate);
+    const todayFormatted = formatDate(today);
+    const fetchStartDate = startDate < todayFormatted ? todayFormatted : formatDate(startDate);
     const endDate = formatDate(currentSeason.endDate);
 
     let currentPage = 1;
