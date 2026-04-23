@@ -57,14 +57,12 @@ export const syncUpcomingMovies = async () => {
         return []; 
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayFormatted = new Date().toISOString().split("T")[0];
     const formatDate = (date) => new Date(date).toISOString().split("T")[0];    
 
     const startDate = formatDate(currentSeason.startDate);
-    const todayFormatted = formatDate(today);
-    const fetchStartDate = startDate < todayFormatted ? todayFormatted : formatDate(startDate);
     const endDate = formatDate(currentSeason.endDate);
+    const fetchStartDate = startDate < todayFormatted ? todayFormatted : formatDate(startDate);
 
     let currentPage = 1;
     let totalPages = 1;
@@ -109,7 +107,7 @@ export const syncUpcomingMovies = async () => {
         if(movie.popularity < 3) return false;
 
         const releaseDate = new Date(movie.release_date);
-        if(releaseDate < today) return false;
+        if(releaseDate < todayFormatted) return false;
         return true;
     })
 

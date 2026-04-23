@@ -23,6 +23,8 @@ import adminRouter from "./routes/admin.routes.js";
 dotenv.config({path: "config/.env"})
 const app = express();
 
+app.set('trust proxy', 1);
+
 // Middlewares
 app.use(logger("dev"));
 app.use(cookieParser());

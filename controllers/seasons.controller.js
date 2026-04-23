@@ -6,12 +6,24 @@ import Movie from "../models/movie.model.js";
 import AppError from "../utils/appError.js";
 import League from "../models/league.model.js";
 
-
-
-
-
-
 // **************** كل الفانكشنز دى خاصة بالادمن ************************************
+
+// هنا هنجيب كل السيزونات اللى موجودة فى الداتا بيز عشان نعرضها للادمن
+export const getAllSeasons = catchAsync(async (req , res , next) => {
+    const seasons = await Season.find().sort({createdAt: -1});
+
+    if(!seasons || seasons.length === 0){
+        return next(new AppError("No seasons found" , 404));
+    }
+    res.status(200).json({
+        status: "success",
+        results: seasons.length,
+        data: {
+            seasons
+        }
+    })
+})
+
 
 // انشاء سيزون جديد
 export const createSeason = catchAsync(async (req , res , next) => {

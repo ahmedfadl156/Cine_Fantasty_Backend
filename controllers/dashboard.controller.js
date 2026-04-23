@@ -194,6 +194,7 @@ export const sanitizeMarketDatabase = async (req, res) => {
 
 export const applyStreamingRevenue = catchAsync(async (req, res, next) => {
     const { movieId } = req.params;
+    const {manualRating , manualVotes} = req.body;
 
     const movie = await Movie.findById(movieId);
     if (!movie) {
@@ -210,28 +211,58 @@ export const applyStreamingRevenue = catchAsync(async (req, res, next) => {
     }
 
     const tmdbData = await response.json();
-
-    const voteAverage = tmdbData.vote_average || 0;
-    const voteCount = tmdbData.vote_count || 0;
+    const imdbId = tmdbData.imdb_id;
     const currentPopularity = tmdbData.popularity || 0;
-
-    if (voteCount < 50) {
-        return next(new AppError("Not enough votes yet to calculate a fair revenue. Try again in a few days.", 400));
+    
+    
+    if(!imdbId){
+        return next(new AppError("No IMDb ID found for this movie. Please check the TMDB API response.", 400));
     }
 
 
-    const qualityFactor = Math.pow(voteAverage / 10, 2);
+    const omdbResponse = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${process.env.OMDB_API_KEY}`);
+    const omdbData = await omdbResponse.json();
 
+    let finalRating = 0;
+    let finalVotes = 0;
+    let dataSource = "OMDb"; 
 
+    if(manualRating !== undefined && manualVotes !== undefined){
+        finalRating = manualRating;
+        finalVotes = manualVotes;
+        dataSource = "Manual Input";
+
+        if(finalVotes < 300){
+            return next(new AppError(`Not enough votes yet (${finalVotes} votes). Wait until it reaches 300.`, 400));
+        }
+    } else{
+    if (omdbData.Response === "False" || omdbData.Error === "Error getting data.") {
+        console.warn(`OMDb failed to find ${imdbId}. Falling back to TMDB data.`);
+        
+        finalRating = tmdbData.vote_average || 0;
+        finalVotes = tmdbData.vote_count || 0;
+        dataSource = "TMDB (Fallback)";
+
+        if (finalVotes < 50) {
+            return next(new AppError(`TMDB Fallback: Not enough votes yet (${finalVotes} votes). Wait until it reaches 50.`, 400));
+        }
+    } else {
+        finalRating = parseFloat(omdbData.imdbRating) || 0;
+        finalVotes = parseInt((omdbData.imdbVotes || "0").replace(/,/g, '')) || 0;
+
+        if (finalVotes < 300) {
+            return next(new AppError(`OMDb: Not enough IMDb votes yet (${finalVotes} votes). Wait until it reaches 300.`, 400));
+        }
+    }
+    }
+
+    const qualityFactor = Math.pow(finalRating / 10, 2);
     const hypeFactor = Math.min(1.5, currentPopularity / 500);
+    
+    const confidenceDivisor = (dataSource === "OMDb" || dataSource === "Manual Input") ? 6000 : 500;    
+    const confidenceWeight = Math.min(1.0, finalVotes / confidenceDivisor);
 
-
-    const confidenceWeight = Math.min(1.0, voteCount / 500);
-
-    // 4. Base ROI (الفيلم كدة كدة بيجيب 40% من قيمته لمجرد عرضه على المنصة)
     const baseROI = 0.4;
-
-    // 5. Final Calculation
     let multiplier = baseROI + (qualityFactor * hypeFactor * confidenceWeight * 2.5);
 
     multiplier = Math.min(3.5, Math.max(0.3, multiplier));
@@ -247,8 +278,9 @@ export const applyStreamingRevenue = catchAsync(async (req, res, next) => {
         message: "Streaming revenue calculated fairly and applied successfully.",
         data: {
             movieTitle: movie.title,
-            tmdbRating: voteAverage,
-            voteCount: voteCount,
+            dataSource: dataSource, 
+            rating: finalRating,
+            votes: finalVotes.toLocaleString(),
             popularity: currentPopularity,
             calculatedMultiplier: multiplier.toFixed(2) + "x",
             basePrice: `$${(basePriceInCents / 100).toLocaleString()}`,
