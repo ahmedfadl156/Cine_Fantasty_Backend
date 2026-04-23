@@ -4,6 +4,7 @@ import Season from "../models/seasons.model.js";
 import redisClient from "../config/redisClient.js";
 import StudioAsset from "../models/studioAsset.model.js";
 import StudioSeason from "../models/studioSeason.model.js";
+import { sanitizeMarketDatabase } from "../controllers/dashboard.controller.js";
 
 dotenv.config({ path: "config/.env" });
 
@@ -143,6 +144,7 @@ export const syncUpcomingMovies = async () => {
     if (bulkOperations.length > 0) {
         const result = await Movie.bulkWrite(bulkOperations);
         console.log(`Sync completed. ${result.upsertedCount} new movies added, ${result.modifiedCount} movies updated.`);
+        sanitizeMarketDatabase();
         if(result.modifiedCount > 0 || result.upsertedCount > 0){
             await redisClient.del(`topMovies:${currentSeason._id}`);
             const upcomingKeys = await redisClient.keys(`upcomingMovies:${currentSeason._id}:*`);
