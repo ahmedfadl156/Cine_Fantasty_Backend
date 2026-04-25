@@ -874,6 +874,7 @@ const swaggerSpec = {
                             seasonId: { $ref: "#/components/schemas/MongoId" },
                             totalInvestedInDollars: { type: "number", example: 7350000 },
                             totalFilmsOwned: { type: "integer", example: 6 },
+                            netProfitInDollars: { type: "number", example: 1250000 },
                           },
                         },
                       ],

@@ -535,3 +535,102 @@ export const getLeagueActivityFeed = catchAsync(async (req , res , next) => {
         }
     });
 })
+
+// الفانكشن المسئولة للادمن لتحديث الدورى
+export const updateLeagueSettings = catchAsync(async (req , res , next) => {
+    const {leagueId} = req.params;
+    const {name , isPublic} = req.body;
+    const userId = req.user._id;
+
+    // نتاكد ان الدورى موجود
+    const league = await League.findById(leagueId);
+
+    if(!league){
+        return next(new AppError("League not found" , 404));
+    }
+
+    // نتأكد ان اليوزر هو صاحب الدورى
+    if(league.ownerId.toString() !== userId.toString()){
+        return next(new AppError("Access denied. Only the league owner can update the settings." , 403));
+    }
+
+    if(name) league.name = name;
+    if(isPublic !== undefined) league.isPublic = isPublic;
+
+    await league.save();
+
+    res.status(200).json({
+        status: "success",
+        message: "League settings updated successfully",
+        data: {
+            league
+        }
+    });
+})
+
+// الفانكشن اللى هيستخدمها الادمن علشان لو عايز يطرد حد 
+export const kickPlayerFromLeague = catchAsync(async (req , res , next) => {
+    const { leagueId , playerId } = req.params;
+    const adminId = req.user._id;
+
+    if(playerId.toString() === adminId.toString()){
+        return next(new AppError("You cannot kick yourself from the league." , 400));
+    }
+
+    const updatedLeague = await League.findByIdAndUpdate(
+        {
+            _id: leagueId,
+            owenerId: adminId
+        },
+        {
+            $pull: {
+                members: playerId
+            }
+        },
+        {
+            returnDocument: "after"
+        }
+    );
+
+    if(!updatedLeague){
+        return next(new AppError("League not found or you do not have permission to kick members." , 404));
+    };
+
+    res.status(200).json({
+        status: "success",
+        message: "The Player successfully kicked from the league.",
+        membersCount: updatedLeague.members.length
+    })
+})
+
+// لو اليوزر هو اللى عايز يخرج من الدورى
+export const leaveLeague = catchAsync(async (req , res , next) => {
+    const {leagueId} = req.params;
+    const userId = req.user._id;
+
+    const league = await League.findById(leagueId);
+
+    if(!league){
+        return next(new AppError("League is not found with this id" , 404))
+    };
+
+    if(league.ownerId.toString() === userId.toString()){
+        return next(new AppError("You can't leave your own league" , 400))
+    }
+
+    if(!league.members.includes(userId)){
+        return next(new AppError("You are not a member of this league" , 400))
+    }
+
+    const updatedLeague = await League.findByIdAndUpdate(leagueId , {
+        $pull: {
+            members: userId
+        }
+    } , {returnDocument: 'after'});
+
+    res.status(200).json({
+        status: "success",
+        message: "You leaved league succesfully",
+        membersCount: updatedLeague.members.length
+    })
+})

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import StudioAsset from "../models/studioAsset.model.js";
+import StudioSeason from "../models/studioSeason.model.js";
 import catchAsync from "../utils/catchAsync.js";
 import Season from "../models/seasons.model.js";
 
@@ -24,6 +25,16 @@ export const getMyStudioAssets = catchAsync(async (req , res , next) => {
             targetSeasonId = currentSeason._id;
         }
 
+        const [targetSeason, studioSeason] = await Promise.all([
+            Season.findById(targetSeasonId).select("startingBudget"),
+            StudioSeason.findOne({
+                userId,
+                seasonId: targetSeasonId
+            }).select("netWorth")
+        ]);
+
+        const startingBudget = targetSeason?.startingBudget || 40000000000;
+        const netWorth = studioSeason?.netWorth || startingBudget;
 
         const dashboardData = await StudioAsset.aggregate([
             {
@@ -141,7 +152,8 @@ export const getMyStudioAssets = catchAsync(async (req , res , next) => {
                 overview: {
                     seasonId: targetSeasonId,
                     totalInvestedInDollars: stats.totalInvested / 100,
-                    totalFilmsOwned: stats.totalFilmsOwned
+                    totalFilmsOwned: stats.totalFilmsOwned,
+                    netProfitInDollars: (netWorth - startingBudget) / 100
                 },
                 dashboard: {
                     inTheaters: dashboardData[0].inTheaters,
