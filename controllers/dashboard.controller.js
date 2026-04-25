@@ -228,7 +228,7 @@ export const applyStreamingRevenue = catchAsync(async (req, res, next) => {
     let dataSource = "OMDb"; 
 
     if(manualRating !== undefined && manualVotes !== undefined){
-        finalRating = manualRating;
+        finalRating = manualRating; 
         finalVotes = manualVotes;
         dataSource = "Manual Input";
 

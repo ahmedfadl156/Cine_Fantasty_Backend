@@ -144,7 +144,6 @@ export const syncUpcomingMovies = async () => {
     if (bulkOperations.length > 0) {
         const result = await Movie.bulkWrite(bulkOperations);
         console.log(`Sync completed. ${result.upsertedCount} new movies added, ${result.modifiedCount} movies updated.`);
-        sanitizeMarketDatabase();
         if(result.modifiedCount > 0 || result.upsertedCount > 0){
             await redisClient.del(`topMovies:${currentSeason._id}`);
             const upcomingKeys = await redisClient.keys(`upcomingMovies:${currentSeason._id}:*`);

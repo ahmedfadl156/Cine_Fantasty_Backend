@@ -28,6 +28,11 @@ const studioAssetSchema = new mongoose.Schema({
         type: String,
         enum: ["ACTIVE" , "SOLD" , "ARCHIVED"],
         default: "ACTIVE"
+    },
+    appliedCard: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Card",
+        default: null
     }
 }, {timestamps: true , toJSON: { virtuals: true } , toObject: { virtuals: true }});
 

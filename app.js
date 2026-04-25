@@ -20,6 +20,7 @@ import rateLimit from "express-rate-limit";
 import redisClient from "./config/redisClient.js";
 import leaderboardRouter from "./routes/leaderboard.routes.js";
 import adminRouter from "./routes/admin.routes.js";
+import cardsRouter from "./routes/cards.routes.js";
 dotenv.config({path: "config/.env"})
 const app = express();
 
@@ -70,6 +71,7 @@ app.use("/api/v1/leagues" , leaguesRouter)
 app.use("/api/v1/seasons" , seasonRouter)
 app.use("/api/v1/dashboard" , dashboardRouter)
 app.use("/api/v1/leaderboard" , leaderboardRouter)
+app.use("/api/v1/cards" , cardsRouter)
 app.use("/api/v1/admin" , adminRouter)
 
 app.all("/{*path}" , (req , res , next) => {
