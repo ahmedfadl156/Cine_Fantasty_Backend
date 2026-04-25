@@ -33,6 +33,15 @@ const studioAssetSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Card",
         default: null
+    },
+    isSettled: {
+        type: Boolean,
+        default: false
+    },
+    earnedRevenue: {
+        type: Number,
+        default: 0,
+        min: [0 , "Earned Revenue cannot be negative"]
     }
 }, {timestamps: true , toJSON: { virtuals: true } , toObject: { virtuals: true }});
 

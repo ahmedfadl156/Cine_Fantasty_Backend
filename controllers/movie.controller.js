@@ -7,6 +7,7 @@ import catchAsync from "../utils/catchAsync.js";
 import NodeCache from "node-cache";
 import redisClient from "../config/redisClient.js";
 import Season from "../models/seasons.model.js";
+import { processMovieSettlement } from "../utils/calculationEngine.js";
 
 const tmdbCache = new NodeCache({stdTTL: 86400});
 
@@ -149,6 +150,7 @@ export const updateMovieAdmin = catchAsync(async (req , res , next) => {
     const isRevenueUpdated = boxOfficePriceInDollars !== undefined && 
                             (boxOfficePriceInDollars * 100) !== movie.boxOfficeRevenue
 
+    const isJustFinished = status === "FINISHED" && movie.status !== "FINISHED";
     // نجهز التحديثات اللى الادمن يعتها
     if(status) movie.status = status;
     if(releaseDate) movie.releaseDate = new Date(releaseDate);
@@ -166,6 +168,12 @@ export const updateMovieAdmin = catchAsync(async (req , res , next) => {
         if(season){
             await calculateAllNetWorth([season]);
         }
+    }
+
+    if(isJustFinished){
+        processMovieSettlement(movie).catch(error => {
+            console.error(`[Settlement CRITICAL ERROR] Failed for movie ${movie._id}:`, error);
+        });
     }
     // هنمسح الكاش القديم علشان التحديثات تظهر لليوزرز علطول
     const seasonIdStr = movie.seasonId.toString();

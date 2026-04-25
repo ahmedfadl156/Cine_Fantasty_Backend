@@ -93,7 +93,12 @@ export const applyCardToMovie = async (req , res , next) => {
 // ************** ADMIN FUNCTIONALITY **************
 export const createCard = catchAsync(async (req , res , next) => {
     const {name , code , description , multiplier , isProtection , budgetConstraint} = req.body;
-    const upperCaseCode = code.toUpperCase();
+
+    if(!code){
+        return next(new AppError("Please enter a code for the card" , 400));
+    }
+
+    const upperCaseCode = code.toUpperCase().trim();
 
     const existingCard = await Card.findOne({code: upperCaseCode});
     if(existingCard){
