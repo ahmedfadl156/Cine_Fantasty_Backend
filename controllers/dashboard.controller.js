@@ -139,14 +139,17 @@ export const sanitizeMarketDatabase = async (req, res) => {
 
         const buggyMovies = await Movie.find({
             status: 'UPCOMING',
-            releaseDate: { $lt: today }
+            releaseDate: { $lte: today }
         });
 
         if (buggyMovies.length === 0) {
-            return res.status(200).json({ 
+            const result = {
                 status: "success",
                 message: "Market is already clean. No buggy movies found." 
-            });
+            };
+
+            if (res) return res.status(200).json(result);
+            return result;
         }
 
         let deletedCount = 0;
@@ -175,7 +178,7 @@ export const sanitizeMarketDatabase = async (req, res) => {
             }
         }
 
-        return res.status(200).json({
+        const result = {
             status: "success",
             message: "Database cleanup completed safely.",
             details: {
@@ -183,11 +186,17 @@ export const sanitizeMarketDatabase = async (req, res) => {
                 deletedMovies: deletedCount,
                 protectedAndMovedToTheaters: protectedCount
             }
-        });
+        };
+
+        if (res) return res.status(200).json(result);
+        return result;
 
     } catch (error) {
         console.error("Cleanup Error:", error);
-        res.status(500).json({ status: "error", message: "Failed to sanitize database." });
+        if (res) {
+            return res.status(500).json({ status: "error", message: "Failed to sanitize database." });
+        }
+        throw error;
     }
 };
 

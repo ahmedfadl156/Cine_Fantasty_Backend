@@ -58,12 +58,19 @@ export const syncUpcomingMovies = async () => {
         return []; 
     }
 
-    const todayFormatted = new Date().toISOString().split("T")[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
     const formatDate = (date) => new Date(date).toISOString().split("T")[0];    
 
-    const startDate = formatDate(currentSeason.startDate);
+    const seasonStartDate = new Date(currentSeason.startDate);
+    seasonStartDate.setHours(0, 0, 0, 0);
+
     const endDate = formatDate(currentSeason.endDate);
-    const fetchStartDate = startDate < todayFormatted ? todayFormatted : formatDate(startDate);
+    const fetchStartDate = formatDate(seasonStartDate > tomorrow ? seasonStartDate : tomorrow);
 
     let currentPage = 1;
     let totalPages = 1;
@@ -106,9 +113,13 @@ export const syncUpcomingMovies = async () => {
     const validMovies = allMovies.filter(movie => {
         if(!movie.poster_path) return false;
         if(movie.popularity < 3) return false;
+        if(!movie.release_date) return false;
 
         const releaseDate = new Date(movie.release_date);
-        if(releaseDate < todayFormatted) return false;
+        releaseDate.setHours(0, 0, 0, 0);
+
+        if(Number.isNaN(releaseDate.getTime())) return false;
+        if(releaseDate <= today) return false;
         return true;
     })
 
@@ -144,7 +155,7 @@ export const syncUpcomingMovies = async () => {
     if (bulkOperations.length > 0) {
         const result = await Movie.bulkWrite(bulkOperations);
         console.log(`Sync completed. ${result.upsertedCount} new movies added, ${result.modifiedCount} movies updated.`);
-        sanitizeMarketDatabase();
+        await sanitizeMarketDatabase();
         if(result.modifiedCount > 0 || result.upsertedCount > 0){
             await redisClient.del(`topMovies:${currentSeason._id}`);
             const upcomingKeys = await redisClient.keys(`upcomingMovies:${currentSeason._id}:*`);
@@ -315,4 +326,3 @@ export const activateTodaysMovies = async () => {
         console.error("Activation Error: " , error)
     }
 }
-

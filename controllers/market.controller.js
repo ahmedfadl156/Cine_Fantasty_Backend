@@ -142,9 +142,13 @@ export const getUpcomingMovies = catchAsync(async (req , res , next) => {
         return res.status(200).json(parsedData);
     }
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const query = {
         status: "UPCOMING",
-        seasonId: currentSeason._id
+        seasonId: currentSeason._id,
+        releaseDate: { $gt: today }
     };
     // هنجيب الافلام اللى لسه هتتعرض بس
     const movies = await Movie.find(query)
@@ -176,7 +180,12 @@ export const getUpcomingMovies = catchAsync(async (req , res , next) => {
 // هنجيب اعلى 8 افلام هنا ال top علشان نعرضهم فى الصفحة الرئيسية
 export const getTopMovies = catchAsync(async (req , res , next) => {
     const currentSeason = await Season.findOne({ status: { $in: ['PRE_SEASON', 'ACTIVE'] } });
-    const query = currentSeason ? { seasonId: currentSeason._id , status: "UPCOMING" } : {status: "UPCOMING"};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const query = currentSeason
+        ? { seasonId: currentSeason._id, status: "UPCOMING", releaseDate: { $gt: today } }
+        : { status: "UPCOMING", releaseDate: { $gt: today } };
 
     const cacheKey = `topMovies:${currentSeason ? currentSeason._id : ''}`
 
