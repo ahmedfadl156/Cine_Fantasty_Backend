@@ -8,6 +8,7 @@ import NodeCache from "node-cache";
 import redisClient from "../config/redisClient.js";
 import Season from "../models/seasons.model.js";
 import { processMovieSettlement } from "../utils/calculationEngine.js";
+import StudioAsset from "../models/studioAsset.model.js";
 
 const tmdbCache = new NodeCache({stdTTL: 86400});
 
@@ -121,9 +122,26 @@ export const getAdminMovies = catchAsync(async(req , res , next) => {
     const movies = await Movie.find(query)
     .populate('seasonId' , 'name status')
     .sort({releaseDate: 1})
-    .skip(skip).limit(limit);
+    .skip(skip).limit(limit).lean();
 
     const totalMovies = await Movie.countDocuments(query);
+
+    const movieIds = movies.map(movie => movie._id);
+
+    const buyerCounts = await StudioAsset.aggregate([
+        { $match: { movieId: { $in: movieIds } } }, 
+        { $group: { _id: "$movieId", count: { $sum: 1 } } } 
+    ]);
+
+    const countsMap = {};
+    buyerCounts.forEach(item => {
+        countsMap[item._id.toString()] = item.count;
+    });
+
+    const moviesWithBuyerCounts = movies.map(movie => ({
+        ...movie,
+        buyersCount: countsMap[movie._id.toString()] || 0
+    }));
 
     res.status(200).json({
         status: "success",
@@ -133,7 +151,7 @@ export const getAdminMovies = catchAsync(async(req , res , next) => {
             totalPages: Math.ceil(totalMovies / limit),
             totalMovies
         },
-        data: { movies }
+        data: { movies: moviesWithBuyerCounts }
     })
 })
 
