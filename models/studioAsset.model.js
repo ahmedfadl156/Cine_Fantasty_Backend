@@ -38,6 +38,15 @@ const studioAssetSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    isForSale: {
+        type: Boolean,
+        default: false
+    },
+    salePrice: {
+        type: Number,
+        default: 0,
+        min: [0 , "Sale Price cannot be negative"]
+    },
     earnedRevenue: {
         type: Number,
         default: 0,
@@ -46,7 +55,7 @@ const studioAssetSchema = new mongoose.Schema({
 }, {timestamps: true , toJSON: { virtuals: true } , toObject: { virtuals: true }});
 
 studioAssetSchema.index({userId: 1 , movieId: 1 , seasonId: 1} , {unique: true});
-
+studioAssetSchema.index({isForSale: 1 , createdAt: -1});
 studioAssetSchema.virtual("purchasePriceInDollars").get(function() {
     return this.purchasePrice / 100;
 })

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { getMe, login, logout, protect, signup } from "../controllers/auth.controller.js";
+import { facebookLogin, getMe, googleLogin, login, logout, protect, signup } from "../controllers/auth.controller.js";
 import { testSync } from "../controllers/movie.controller.js";
 import { signupValidator } from "../middlewares/validators/authValidator.js";
 
@@ -19,4 +19,6 @@ authRouter.post('/logout' , logout);
 authRouter.post('/signup' , loginLimiter , signupValidator , signup);
 authRouter.get('/getMe' , protect , getMe);
 authRouter.post('/test-sync' , testSync);
+authRouter.post("/google" , googleLogin);
+authRouter.post("/facebook" , facebookLogin);
 export default authRouter;

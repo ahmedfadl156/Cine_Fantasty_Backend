@@ -431,7 +431,7 @@ export const getLeagueLeaderboard = catchAsync(async (req , res , next) => {
         return next(new AppError("League not found" , 404));
     }
 
-    if(!targetLeague.members.includes(userId)){
+    if(!targetLeague.members.some(memberId => memberId.equals(userId))){
         return next(new AppError('Access denied. You are not a member of this league.', 403));
     }
 
@@ -506,7 +506,7 @@ export const getLeagueActivityFeed = catchAsync(async (req , res , next) => {
         return next(new AppError("League Not Found" , 404));
     }
 
-    if(!targetLeague.members.includes(userId)){
+    if(!targetLeague.members.some(memberId => memberId.equals(userId))){
         return next(new AppError('Access denied. You are not a member of this league.', 403));
     }
 

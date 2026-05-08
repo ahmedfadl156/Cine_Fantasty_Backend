@@ -6,6 +6,7 @@ import User from "../models/user.model.js"
 import AppError from "../utils/appError.js"
 import Season from "../models/seasons.model.js"
 import StudioSeason from "../models/studioSeason.model.js"
+import { handleSocialLogin, verifyFacebookToken, verifyGoogleToken } from "../services/oauth.service.js"
 const signToken = (user) => {
     return jwt.sign({id: user._id , role: user.role} , process.env.JWT_SECRET , {
         expiresIn: process.env.JWT_EXPIRES_IN
@@ -190,3 +191,57 @@ export const restrictTo = (...roles) => {
         next();
     }
 }
+
+export const googleLogin = catchAsync(async (req , res , next) => {
+    const {idToken} = req.body;
+
+    if(!idToken) {
+        return next(new AppError('Please provide idToken' , 400));
+    }
+
+    const payload = await verifyGoogleToken(idToken);
+
+    const providerData = {
+        id: payload.sub,
+        email: payload.email,
+        studioName: payload.name,
+        picture: payload.picture
+    };
+
+    const user = await handleSocialLogin(providerData , "google");
+
+    createSendToken(user._id , 200 , res);
+
+    res.status(200).json({
+        status: "success",
+        data: {
+            user
+        }
+    })
+})
+
+export const facebookLogin = catchAsync(async (req, res, next) => {
+    const { accessToken } = req.body;
+
+    if (!accessToken) {
+        return next(new AppError("يرجى توفير Facebook Token", 400));
+    }
+
+    const payload = await verifyFacebookToken(accessToken);
+    
+    const providerData = {
+        id: payload.id, 
+        email: payload.email,
+        studioName: payload.name, 
+        picture: payload.picture?.data?.url 
+    };
+
+    const user = await handleSocialLogin(providerData, 'facebook');
+
+    createSendToken(user._id, 200, res);
+
+    res.status(200).json({
+        status: 'success',
+        data: { user }
+    });
+});

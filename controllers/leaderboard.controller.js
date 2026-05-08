@@ -23,7 +23,9 @@ export const getLeaderboard = catchAsync(async (req , res , next) => {
         select: "studioName avatar"
     })
     
-    const formattedLeaderboard = leaderboard.map((studio , index) => {
+    const formattedLeaderboard = leaderboard
+    .filter(studio => studio.userId)
+    .map((studio , index) => {
         return {
             rank: index + 1,
             studioId: studio.userId._id,

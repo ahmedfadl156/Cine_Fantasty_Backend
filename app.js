@@ -21,6 +21,7 @@ import redisClient from "./config/redisClient.js";
 import leaderboardRouter from "./routes/leaderboard.routes.js";
 import adminRouter from "./routes/admin.routes.js";
 import cardsRouter from "./routes/cards.routes.js";
+import transferMarketRouter from "./routes/transfermarket.routes.js";
 dotenv.config({path: "config/.env"})
 const app = express();
 
@@ -73,6 +74,7 @@ app.use("/api/v1/dashboard" , dashboardRouter)
 app.use("/api/v1/leaderboard" , leaderboardRouter)
 app.use("/api/v1/cards" , cardsRouter)
 app.use("/api/v1/admin" , adminRouter)
+app.use("/api/v1/transfer-market" , transferMarketRouter)
 
 app.all("/{*path}" , (req , res , next) => {
     next(new AppError(`Can't Find ${req.originalUrl} on this server!` , 404))
